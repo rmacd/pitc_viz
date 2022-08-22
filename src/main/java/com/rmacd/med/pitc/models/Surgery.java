@@ -1,4 +1,4 @@
-package models;
+package com.rmacd.med.pitc.models;
 
 import java.util.Objects;
 

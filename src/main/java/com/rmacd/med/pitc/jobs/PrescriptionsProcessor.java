@@ -1,8 +1,11 @@
+package com.rmacd.med.pitc.jobs;
+
 import com.opencsv.*;
 import com.opencsv.exceptions.CsvException;
-import models.Surgery;
+import com.rmacd.med.pitc.models.Surgery;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
 
 import java.io.*;
 import java.time.LocalDate;
@@ -14,36 +17,30 @@ import java.util.*;
 // https://www.isdscotland.org/Health-Topics/Prescribing-and-Medicines/_docs/Open_Data_Glossary_of_Terms.pdf
 // https://www.isdscotland.org/Health-Topics/General-Practice/Workforce-and-Practice-Populations/
 //
-public class Runner {
+@Component
+public class PrescriptionsProcessor implements Runnable {
 
-    private static final Logger logger = LoggerFactory.getLogger(Runner.class);
+    private static final Logger logger = LoggerFactory.getLogger(PrescriptionsProcessor.class);
+
+    final Map<String, Surgery> surgeries;
+
+    public PrescriptionsProcessor(Map<String, Surgery> surgeries) {
+        this.surgeries = surgeries;
+    }
 
     // ugly single function that does everything
-    public static void main(String[] args) {
+    @Override
+    public void run() {
+
         logger.info("Running merge ...");
         List<String[]> output = new ArrayList<>();
         output.add(new String[]{"gp_code", "date", "medication", "prescribed_num", "units_total", "list_sz", "lat", "lng", "per_cap_presc", "per_cap_unit", "geo"});
 
         CSVParser prescParser = new CSVParserBuilder().withIgnoreQuotations(true).withSeparator(',').build();
-        CSVParser surgParser = new CSVParserBuilder().withSeparator('\t').withIgnoreQuotations(true).build();
 
-        try (CSVReader surgReader = new CSVReaderBuilder(new FileReader("./data/scottish-gp-locations.tsv"))
-                        .withSkipLines(1).withCSVParser(surgParser).build();
-             CSVWriter writer = new CSVWriter(new FileWriter("./merged.tsv"), '\t', ICSVWriter.NO_QUOTE_CHARACTER, '\\', "\n");
+        try (
+             CSVWriter writer = new CSVWriter(new FileWriter("./scratch/merged.tsv"), '\t', ICSVWriter.NO_QUOTE_CHARACTER, '\\', "\n");
                 ) {
-
-            List<String[]> surgeriesList = surgReader.readAll();
-            Map<String, Surgery> surgeries = new HashMap<>();
-            for (String[] surgery : surgeriesList) {
-                surgeries.put(surgery[0],
-                        new Surgery.SurgeryBuilder(surgery[0])
-                                .withPostCode(surgery[2])
-                                .withLat(Float.parseFloat(surgery[6]))
-                                .withLon(Float.parseFloat(surgery[7]))
-                                .withListSize(Integer.parseInt(surgery[1]))
-                                .build()
-                );
-            }
 
             File folder = new File("./scratch");
             List<File> fileList = Arrays.asList(Objects.requireNonNull(
@@ -56,8 +53,6 @@ public class Runner {
                 try (CSVReader prescReader = new CSVReaderBuilder(new FileReader(file))
                         .withSkipLines(1).withCSVParser(prescParser).build()) {
                     List<String[]> prescriptions = prescReader.readAll();
-
-                    logger.info("{}: loaded {} prescriptions and {} surgeries", file.getName(), prescriptions.size(), surgeriesList.size());
 
                     for (String[] prescription : prescriptions) {
                         Surgery surgery = surgeries.get(prescription[1]);
@@ -82,6 +77,6 @@ public class Runner {
         } catch (IOException | CsvException e) {
             logger.error(e.getMessage(), e);
         }
-    }
 
+    }
 }
